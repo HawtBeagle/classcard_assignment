@@ -100,3 +100,53 @@ There are different options for caching the data
 
     Refer to : App\Http\Controllers\QueryOptimizationController.php
 
+Part 2: Queue race conditions
+
+Scenario:
+We have multiple laravel jobs that update the user's balance when invoice is created, updated or deleted
+For example for User 1
+1.Invoice created - job InvoiceCreated is dispatched
+2.Invoice updated - job InvoiceUpdated is dispatched
+3.Invoice deleted - job InvoiceDeleted is dispatched
+
+These jobs are processed by laravel workers which may run on multiple servers
+-> Problem here is since workers pick the jobs asynchronously there is a chance that they do not follow any order for these.
+-> If workers pick updated job first and then created job the balance would be updated incorrectly this is a race condition where concurrent operations on the same data leads to incorrect results.
+
+1. Solutions:
+    1. Per user queue
+        -> Assign a queue per user so that we ensure jobs for the same user are processed sequentially.
+        -> Workers process the jobs in FIFO order per queue so that they can still process parallely for different users.
+        -> It is simple to implement in laravel.
+        -> The only issue is most probably we will have many users so we have to have dynamic queue management to ensure each user jobs are assigned to a queue.
+
+    2. Distributed lock
+        a. Acquire a lock and ensure only one job can update the balance at a time, even if the jobs are processed in parallel
+            Example: $lock = Cache::lock("user_balance_{$userId}", 10);
+            if ($lock->get()) {
+                try {
+                    // safely update balance
+                } finally {
+                    $lock->release();
+                }
+            } else {
+                // retry later
+            }
+        b. We can use optimistic lock as well
+            DB::table('users')
+            ->where('id', $userId)
+            ->where('version', $oldVersion)
+            ->update([
+                'balance' => $newBalance,
+                'version' => $oldVersion + 1
+            ]);
+            -> we will maintain one more column which is version
+            -> each job, before updating the balance in the table checks the version , if it matches with the version at the time of reading, then it will update or otherwise we can retry 
+
+        Refer to:
+        App\Console\Commands\SimulateInvoiceEvents.php
+        App\Console\Commands\ProcessUserStream.php
+        App\Services\UserEventProducer.php
+
+2. To handle multiple concurrent transactions on the same user, we use Redis Streams to ensure events are processed sequentially per user. On the database side, we wrap updates in row-level transactions (lockForUpdate) to prevent race conditions. This guarantees ordering and consistency even when concurrent actions happen.
+ 
