@@ -253,3 +253,46 @@ Part 3 Multi tenant data isolation
     
     Refer to: test\Feature\TenantIsolationTest.php
 
+
+Part 4 Fast dashboard aggregation
+
+1. Refer to App\Services\DashboardService.php
+
+    -> Wrote queries to generate the required data on the dashboard
+    -> Used aggregations to efficiently fetch the data
+
+2. Caching strategy
+
+    -> Implemented Redis caching using Cache::remember() in the DashboardService.
+
+    -> Each branch’s dashboard is cached with a key like dashboard:branch:<branchId> for 5 minutes, to avoid recalculating metrics on every request.
+
+    The cache can be cleared selectively when data changes using Cache::forget()
+
+    Each branch has its own cache key and queries are filtered by branch_id, ensuring tenant/branch isolation.
+
+    Used database-level aggregations like SUM, COUNT, GROUP BY to ensure efficient queries even with large volumes of data.
+
+    Also we are using a scheduled job that runs for every minutes to precompute the metrics for all branches and stores them in redis.
+
+
+3. Solution for 100+ branches
+    Solution 1: 
+        -> We are already precomputing the metrics for all the branches every five minutes and caching them. 
+
+        -> So if multiple concurrent requests for different branches come , we can serve from cache
+
+    Solution 2: 
+        -> We can use event driven incremental updates
+
+        -> Instead of recomputing all the metrics for every branch, we will listen to relevant event and update only the metrics of the effected branch
+        
+        -> We can either store this in redis or create a summary table which contains metrics for each branch
+
+        For example:
+
+            Event::listen(InvoiceCreated::class, function($event) {
+                Cache::increment("dashboard:branch:{$event->invoice->branch_id}:total_revenue", $event->invoice->total);
+            });
+
+
