@@ -5,11 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class User extends Model 
+class FormOption extends Model
 {
     use HasFactory;
-    public function formData() 
+    public function formData()
     {
-        return $this->hasMany(FormData::class);
+        return $this->hasMany(FormData::class, 'option_id');
     }
 }
