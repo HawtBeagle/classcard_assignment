@@ -150,3 +150,44 @@ These jobs are processed by laravel workers which may run on multiple servers
 
 2. To handle multiple concurrent transactions on the same user, we use Redis Streams to ensure events are processed sequentially per user. On the database side, we wrap updates in row-level transactions (lockForUpdate) to prevent race conditions. This guarantees ordering and consistency even when concurrent actions happen.
  
+
+
+Part 3 Multi tenant data isolation
+
+1. Used a global Eloquent scope (TenantScope) to automatically filter all queries based on the logged-in user’s tenant_id.
+    -> This ensures developers don’t accidentally forget to add tenant filtering.
+    Example: User::all() automatically fetches only users belonging to the authenticated tenant.
+
+    Auto-set tenant_id on creation:
+    -> Whenever a new record (user, form data) is created, the model automatically assigns the tenant_id of the authenticated user.
+
+    By implement this we have
+        -> Centralized enforcement of tenant isolation.
+        -> Less chance of human error in queries.
+        -> Works at both query and creation levels.
+
+    User Model
+    -> Added tenant_id to $fillable.
+    -> Added booted() method:
+    -> Applies TenantScope globally.
+    -> Uses auth()->user()->tenant_id to filter all queries automatically.
+
+    Refer to: App\Scopes\TenantScope.php
+    App\Models\User.php
+
+2. How can we ensure tenant level isolation at controller/service layer
+    -> We have already used global scope at application layer
+    -> The scope automatically applies the filter and fetches the data based on the tenant id of the loggedin user
+    -> When creating a new record also , tenant id is automatically set based on the loggedin user
+
+3. How can we test tenant data leaks
+    -> Ensure that users can only access data belonging to their own tenant and that new records are correctly assigned to the tenant.
+    How the test works:
+        -> Simulate a logged-in user for a specific tenant.
+
+        -> Fetch data (User::all()) and assert that all returned rows have the same tenant_id as the logged-in user.
+
+        -> Create a new user and assert that the tenant_id is automatically set to the logged-in user’s tenant.
+    
+    Refer to: test\Feature\TenantIsolationTest.php
+
