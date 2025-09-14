@@ -259,9 +259,10 @@ Part 4 Fast dashboard aggregation
 1. Refer to App\Services\DashboardService.php
 
     -> Wrote queries to generate the required data on the dashboard
+   
     -> Used aggregations to efficiently fetch the data
 
-2. Caching strategy
+3. Caching strategy
 
     -> Implemented Redis caching using Cache::remember() in the DashboardService.
 
@@ -276,13 +277,16 @@ Part 4 Fast dashboard aggregation
     Also we are using a scheduled job that runs for every minutes to precompute the metrics for all branches and stores them in redis.
 
 
-3. Solution for 100+ branches
-    Solution 1: 
+4. Solution for 100+ branches
+5. 
+    Solution 1:
+   
         -> We are already precomputing the metrics for all the branches every five minutes and caching them. 
 
         -> So if multiple concurrent requests for different branches come , we can serve from cache
 
-    Solution 2: 
+    Solution 2:
+   
         -> We can use event driven incremental updates
 
         -> Instead of recomputing all the metrics for every branch, we will listen to relevant event and update only the metrics of the effected branch
